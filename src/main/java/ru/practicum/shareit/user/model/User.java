@@ -1,8 +1,10 @@
 package ru.practicum.shareit.user.model;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
+@Getter
+@Setter
+@AllArgsConstructor
 @Data
 @Builder(toBuilder = true)
 public class User {
