@@ -32,14 +32,14 @@ public class ItemController {
 
     @GetMapping
     public List<GetItemDto> getAllByUserId(@RequestHeader(REQUEST_HEADER_USER_ID) long userId) {
-        log.debug("Получение списка: {}", userId);
+        log.info("Получение списка: {}", userId);
         return itemService.getAllByUserId(userId);
     }
 
     @GetMapping("/{itemId}")
     public GetItemDto getByItemId(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
                                   @PathVariable long itemId) {
-        log.debug("Запрашиваем вещь {} по идентификатору владельца: {}", itemId, userId);
+        log.info("Запрашиваем вещь {} по идентификатору владельца: {}", itemId, userId);
         return itemService.getOneById(userId, itemId);
     }
 
@@ -47,7 +47,7 @@ public class ItemController {
     @Validated(OnCreate.class)
     public GetItemDto create(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
                              @RequestBody @Valid CreateUpdateItemDto itemDto) {
-        log.debug("Добавить вещь {}", userId);
+        log.info("Добавить вещь {}", userId);
         return itemService.create(userId, itemDto);
     }
 
@@ -55,21 +55,21 @@ public class ItemController {
     public GetItemDto update(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
                              @PathVariable long itemId,
                              @RequestBody @Validated(OnUpdate.class) CreateUpdateItemDto itemDto) {
-        log.debug("Обновить вещь {}", itemId);
+        log.info("Обновить вещь {}", itemId);
         return itemService.update(userId, itemId, itemDto);
     }
 
     @DeleteMapping("/{itemId}")
     public void delete(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
                        @PathVariable long itemId) {
-        log.debug("Удалить вещь {}", itemId);
+        log.info("Удалить вещь {}", itemId);
         itemService.delete(userId, itemId);
     }
 
     @GetMapping("/search")
     public List<GetItemDto> search(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
                                    @RequestParam String text) {
-        log.debug("Найти {} у: {}", text, userId);
+        log.info("Найти {} у: {}", text, userId);
         return itemService.search(userId, text);
     }
 }

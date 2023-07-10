@@ -33,26 +33,27 @@ public class UserController {
 
     @GetMapping("/{userId}")
     public GetUserDto getById(@PathVariable long userId) {
-        log.debug("Получение пользователя по ID: {}", userId);
+        log.info("Получение пользователя по ID: {}", userId);
         return userService.getById(userId);
     }
 
+
     @PostMapping
     public GetUserDto create(@RequestBody @Validated(OnCreate.class) CreateUpdateUserDto createUpdateUserDto) {
-        log.debug("Создать пользователя: {}", createUpdateUserDto);
+        log.info("Запрос на добавление пользователя");
         return userService.create(createUpdateUserDto);
     }
 
     @PatchMapping("/{userId}")
     public GetUserDto update(@PathVariable long userId,
                              @RequestBody @Validated(OnUpdate.class) CreateUpdateUserDto createUpdateUserDto) {
-        log.debug("Получить пользователя: {}", createUpdateUserDto);
+        log.info("Получить пользователя: {}", createUpdateUserDto);
         return userService.update(userId, createUpdateUserDto);
     }
 
     @DeleteMapping("/{userId}")
     public void deleteById(@PathVariable long userId) {
-        log.debug("Удалить пользователя: {}", userId);
+        log.info("Удалить пользователя: {}", userId);
         userService.deleteById(userId);
     }
 }
