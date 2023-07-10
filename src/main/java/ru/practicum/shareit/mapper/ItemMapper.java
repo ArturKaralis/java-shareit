@@ -1,8 +1,5 @@
 package ru.practicum.shareit.mapper;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.experimental.UtilityClass;
 import ru.practicum.shareit.item.dto.CreateUpdateItemDto;
 import ru.practicum.shareit.item.dto.GetItemDto;
