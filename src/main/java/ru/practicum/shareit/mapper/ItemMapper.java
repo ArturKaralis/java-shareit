@@ -9,9 +9,6 @@ import ru.practicum.shareit.item.dto.GetItemDto;
 import ru.practicum.shareit.item.model.Item;
 
 @UtilityClass
-@Getter
-@Setter
-@AllArgsConstructor
 public class ItemMapper {
     public GetItemDto getItemDtoFromItem(Item item) {
         return GetItemDto.builder()
