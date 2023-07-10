@@ -9,9 +9,6 @@ import ru.practicum.shareit.user.dto.GetUserDto;
 import ru.practicum.shareit.user.model.User;
 
 @UtilityClass
-@Getter
-@Setter
-@AllArgsConstructor
 public class UserMapper {
     public GetUserDto toGetUserDtoFromUser(User user) {
         return GetUserDto.builder()
