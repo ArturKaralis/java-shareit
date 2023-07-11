@@ -18,7 +18,6 @@ import ru.practicum.shareit.marker.OnCreate;
 import ru.practicum.shareit.marker.OnUpdate;
 
 import lombok.extern.slf4j.Slf4j;
-import javax.validation.Valid;
 import java.util.List;
 
 @Slf4j
@@ -44,9 +43,8 @@ public class ItemController {
     }
 
     @PostMapping
-    @Validated(OnCreate.class)
     public GetItemDto create(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
-                             @RequestBody @Valid CreateUpdateItemDto itemDto) {
+                             @RequestBody @Validated(OnCreate.class) CreateUpdateItemDto itemDto) {
         log.info("Добавить вещь {}", userId);
         return itemService.create(userId, itemDto);
     }
