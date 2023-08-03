@@ -3,6 +3,7 @@ package ru.practicum.shareit.item;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.shareit.booking.BookingStorage;
 import ru.practicum.shareit.exception.MethodArgumentException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.dto.CreateCommentDto;
@@ -30,6 +31,8 @@ public class ItemServiceImpl implements ItemService {
     private final ItemStorage itemStorage;
     private final UserStorage userStorage;
     private final CommentStorage commentStorage;
+
+    private final BookingStorage bookingStorage;
 
     @Transactional(readOnly = true)
     @Override
@@ -153,8 +156,9 @@ public class ItemServiceImpl implements ItemService {
         Item item = itemStorage.findByIdWithOwner(itemId).orElseThrow(
                 () -> new NotFoundException("Вещь не найдена")
         );
-
-        if (isBookingByUser(user, item)) {
+        LocalDateTime currentTime = LocalDateTime.now();
+        if (bookingStorage.bookingsBeforeNowCount(user, item, currentTime) != 0) {
+        //if (isBookingByUser(user, item)) {
             Comment comment = CommentMapper.toCommentFromCreateCommentDto(commentDto);
 
             comment.setAuthor(user);
@@ -169,10 +173,11 @@ public class ItemServiceImpl implements ItemService {
         }
     }
 
-    private Boolean isBookingByUser(User user, Item item) {
+    /*private Boolean isBookingByUser(User user, Item item) {
         LocalDateTime currentTime = LocalDateTime.now();
         return item.getBookings()
                 .stream()
                 .anyMatch(t -> t.getBooker().equals(user) && t.getEndDate().isBefore(currentTime));
-    }
+
+    }*/
 }

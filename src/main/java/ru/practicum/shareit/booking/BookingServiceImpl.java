@@ -16,6 +16,7 @@ import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.mapper.BookingMapper;
 import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.user.model.User;
+import ru.practicum.shareit.validator.StartBeforeEndDateValid;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -26,6 +27,7 @@ import static ru.practicum.shareit.util.Constants.SORT_BY_START_DATE_DESC;
 
 @Service
 @RequiredArgsConstructor
+@StartBeforeEndDateValid
 @Transactional
 public class BookingServiceImpl implements BookingService {
     private final BookingStorage bookingStorage;
@@ -39,9 +41,7 @@ public class BookingServiceImpl implements BookingService {
                 () -> new NotFoundException("Пользователь не найден")
         );
 
-        BookingState state;
-
-        state = BookingState.valueOf(stateString.toUpperCase());
+        BookingState state = BookingState.valueOf(stateString.toUpperCase());
         LocalDateTime currentMoment = LocalDateTime.now();
         List<Booking> bookings;
 
@@ -81,9 +81,7 @@ public class BookingServiceImpl implements BookingService {
                 () -> new NotFoundException("Пользователь не найден")
         );
 
-        BookingState state;
-
-        state = BookingState.valueOf(stateString.toUpperCase());
+        BookingState state = BookingState.valueOf(stateString.toUpperCase());
         LocalDateTime currentMoment = LocalDateTime.now();
         List<Booking> bookings;
 
@@ -190,6 +188,6 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setStatus(status);
 
-        return BookingMapper.toGetBookingDtoFromBooking(bookingStorage.save(booking));
+        return BookingMapper.toGetBookingDtoFromBooking(booking);
     }
 }

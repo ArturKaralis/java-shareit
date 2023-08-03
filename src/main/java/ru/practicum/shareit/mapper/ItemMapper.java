@@ -50,7 +50,7 @@ public class ItemMapper {
         Booking lastBooking = bookings
                 .stream()
                 .sorted(orderByStartDateDesc)
-                .filter(t -> t.getStartDate().isBefore(currentTime) &&
+                .filter(t -> !t.getStartDate().isAfter(currentTime) &&
                         t.getStatus().equals(BookingStatus.APPROVED))
                 .findFirst()
                 .orElse(null);

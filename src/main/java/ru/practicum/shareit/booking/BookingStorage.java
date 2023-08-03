@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
 import ru.practicum.shareit.booking.enam.BookingStatus;
 import ru.practicum.shareit.booking.model.Booking;
+import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.user.model.User;
 
 import java.time.LocalDateTime;
@@ -15,7 +16,7 @@ import java.util.Optional;
 
 public interface BookingStorage extends JpaRepository<Booking, Long> {
 
-    @Query("select b " +
+    @Query(value = "select b " +
             "from Booking b " +
             "join fetch b.booker " +
             "join fetch b.item i " +
@@ -106,4 +107,11 @@ public interface BookingStorage extends JpaRepository<Booking, Long> {
             "where i.owner = :user " +
             "   and b.status = :status ")
     List<Booking> findByItemOwnerAndStatus(@Param("user") User itemOwner, @Param("status") BookingStatus status, Sort startDate);
+
+    @Query(value = "select count(b)" +
+            "from Booking b " +
+            "where b.booker = ?1 " +
+            "and b.item = ?2 " +
+            "and b.endDate < ?3 ")
+    Long bookingsBeforeNowCount(User booker, Item item, LocalDateTime nowTime);
 }
