@@ -7,6 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import ru.practicum.shareit.booking.model.Booking;
+import ru.practicum.shareit.request.ItemRequest;
 import ru.practicum.shareit.user.model.User;
 
 import javax.persistence.Column;
@@ -56,6 +57,10 @@ public class Item {
     @JoinColumn(name = "item_id")
     @ToString.Exclude
     private Set<Comment> comments;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private ItemRequest request;
 
     public User getOwner() {
         return owner.toBuilder().build();
