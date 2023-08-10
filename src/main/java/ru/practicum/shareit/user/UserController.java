@@ -17,6 +17,7 @@ import java.util.List;
 @RequestMapping(path = "/users")
 @RequiredArgsConstructor
 @ToLog
+@Validated
 public class UserController {
     private final UserService userService;
 
