@@ -14,7 +14,6 @@
 	<version>0.0.1-SNAPSHOT</version>
 
 	<name>ShareIt</name>
-
 	<properties>
 		<java.version>11</java.version>
 	</properties>
@@ -62,6 +61,16 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+        <dependency>
+            <groupId>org.andromda.thirdparty.jaxb2_commons</groupId>
+            <artifactId>commons-lang-plugin</artifactId>
+            <version>2.2</version>
+        </dependency>
+		<dependency>
+			<groupId>com.flipthebird.gwt-hashcode-equals</groupId>
+			<artifactId>gwt-hashcode-equals</artifactId>
+			<version>0.1.0</version>
 		</dependency>
 	</dependencies>
 
