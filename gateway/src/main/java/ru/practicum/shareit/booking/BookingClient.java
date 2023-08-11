@@ -7,8 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.DefaultUriBuilderFactory;
-import ru.practicum.shareit.booking.dto.BookingDto;
-import ru.practicum.shareit.booking.enums.State;
+import ru.practicum.shareit.booking.dto.CreateBookingDto;
 import ru.practicum.shareit.client.BaseClient;
 
 import java.util.Map;
@@ -27,36 +26,33 @@ public class BookingClient extends BaseClient {
         );
     }
 
-    public ResponseEntity<Object> findByBookerId(Integer userId, State state, Integer from, Integer size) {
+    public ResponseEntity<Object> getUserBookings(long userId, String state, int from, int size) {
         Map<String, Object> parameters = Map.of(
-                "state", state.name(),
+                "state", state,
                 "from", from,
                 "size", size
         );
         return get("?state={state}&from={from}&size={size}", userId, parameters);
     }
 
-    public ResponseEntity<Object> findByOwnerId(Integer userId, State state, Integer from, Integer size) {
+    public ResponseEntity<Object> getOwnerBookings(long userId, String state, int from, int size) {
         Map<String, Object> parameters = Map.of(
-                "state", state.name(),
+                "state", state,
                 "from", from,
                 "size", size
         );
         return get("/owner?state={state}&from={from}&size={size}", userId, parameters);
     }
 
-    public ResponseEntity<Object> save(Integer userId, BookingDto bookingDto) {
-        return post("", userId, bookingDto);
-    }
-
-    public ResponseEntity<Object> update(Integer userId, Boolean approved, Integer bookingId) {
-        Map<String, Object> parameters = Map.of(
-                "approved", approved
-        );
-        return patch("/" + bookingId + "/?approved={approved}", userId, parameters);
-    }
-
-    public ResponseEntity<Object> getById(Integer userId, Integer bookingId) {
+    public ResponseEntity<Object> getBookingByUserOwner(long userId, long bookingId) {
         return get("/" + bookingId, userId);
+    }
+
+    public ResponseEntity<Object> create(long userId, CreateBookingDto createBookingDto) {
+        return post("", userId, createBookingDto);
+    }
+
+    public ResponseEntity<Object> approveBooking(long userId, long bookingId, Boolean approved) {
+        return patch(String.format("/%s?approved=%s", bookingId, approved), userId);
     }
 }

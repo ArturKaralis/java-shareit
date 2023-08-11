@@ -1,36 +1,54 @@
 package ru.practicum.shareit.booking.model;
 
-import lombok.Getter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import ru.practicum.shareit.booking.enums.Status;
+import lombok.ToString;
+import ru.practicum.shareit.booking.enam.BookingStatus;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.user.model.User;
 
-import javax.persistence.*;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.ManyToOne;
+import javax.persistence.Table;
 import java.time.LocalDateTime;
 
+@Data
 @Entity
-@Table(name = "BOOKINGS")
-@Getter
-@Setter
+@Table(name = "bookings", schema = "public")
+@EqualsAndHashCode(exclude = {"startDate", "endDate", "item", "booker", "status"})
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder(toBuilder = true)
 public class Booking {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
-    @Column(name = "start_date")
-    private LocalDateTime start;
-    @Column(name = "end_date")
-    private LocalDateTime end;
-    @Enumerated(EnumType.STRING)
-    private Status status;
-    @ManyToOne
-    @JoinColumn(name = "booker_id")
-    private User booker;
-    @ManyToOne
-    @JoinColumn(name = "item_id")
+    private Long id;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDateTime startDate;
+
+    @Column(name = "end_date", nullable = false)
+    private LocalDateTime endDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     private Item item;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private User booker;
+
+    @Enumerated(EnumType.STRING)
+    private BookingStatus status;
 }

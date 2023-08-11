@@ -1,24 +1,25 @@
 package ru.practicum.shareit.item;
 
-import ru.practicum.shareit.item.dto.CommentDto;
-import ru.practicum.shareit.item.dto.CommentResponseDto;
-import ru.practicum.shareit.item.dto.ItemDto;
-import ru.practicum.shareit.item.dto.ItemResponseDto;
+import ru.practicum.shareit.item.dto.CreateCommentDto;
+import ru.practicum.shareit.item.dto.CreateUpdateItemDto;
+import ru.practicum.shareit.item.dto.GetCommentDto;
+import ru.practicum.shareit.item.dto.GetItemDto;
 
 import java.util.List;
 
 public interface ItemService {
 
-    List<ItemResponseDto> getAll(Integer ownerId, Integer from, Integer size);
+    List<GetItemDto> getAllByUserId(long userId, int from, int size);
 
-    ItemResponseDto getById(Integer itemId, Integer ownerId);
+    GetItemDto getOneById(long userId, long itemId);
 
-    ItemResponseDto save(ItemDto itemDto, Integer ownerId);
+    GetItemDto create(long userId, CreateUpdateItemDto createUpdateItemDto);
 
-    ItemResponseDto update(ItemDto itemDto, Integer itemId, Integer ownerId);
+    GetItemDto update(long userId, long itemId, CreateUpdateItemDto updateItemDto);
 
-    List<ItemResponseDto> search(String text, Integer from, Integer size);
+    void delete(long userId, long itemId);
 
-    CommentResponseDto saveComment(CommentDto commentDto, Integer itemId, Integer userId);
+    List<GetItemDto> search(long userId, String text, int from, int size);
 
+    GetCommentDto createComment(long userId, long itemId, CreateCommentDto commentDto);
 }

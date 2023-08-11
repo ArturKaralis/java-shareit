@@ -1,185 +1,421 @@
 package ru.practicum.shareit.item;
 
-import lombok.RequiredArgsConstructor;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import ru.practicum.shareit.booking.BookingService;
-import ru.practicum.shareit.booking.dto.BookingDto;
+import org.mockito.Mockito;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import ru.practicum.shareit.booking.BookingStorage;
+import ru.practicum.shareit.booking.enam.BookingStatus;
 import ru.practicum.shareit.booking.model.Booking;
-import ru.practicum.shareit.item.dto.CommentDto;
-import ru.practicum.shareit.item.dto.CommentResponseDto;
-import ru.practicum.shareit.item.dto.ItemDto;
-import ru.practicum.shareit.item.dto.ItemResponseDto;
-import ru.practicum.shareit.item.impl.ItemServiceImpl;
+import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.item.dto.CreateCommentDto;
+import ru.practicum.shareit.item.dto.CreateUpdateItemDto;
+import ru.practicum.shareit.item.dto.GetItemDto;
+import ru.practicum.shareit.item.model.Comment;
 import ru.practicum.shareit.item.model.Item;
-import ru.practicum.shareit.user.UserService;
-import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.request.ItemRequestStorage;
+import ru.practicum.shareit.request.ItemRequest;
+import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.user.model.User;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.transaction.Transactional;
-
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasSize;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static ru.practicum.shareit.util.Constants.orderByCreatedDesc;
 
-@Transactional
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
-public class ItemServiceImplTest {
+class ItemServiceImplTest {
+    private static ItemService itemService;
+    private static ItemStorage itemStorage;
+    private static UserStorage userStorage;
+    private static CommentStorage commentStorage;
+    private static BookingStorage bookingStorage;
+    private static ItemRequestStorage itemRequestStorage;
 
-    private final EntityManager em;
-    private final ItemServiceImpl service;
-    private final UserService userService;
-    private final BookingService bookingService;
+    private static User user;
+    private static ItemRequest request;
+    private static LocalDateTime currentTime;
+    private static CreateUpdateItemDto createItemDto;
+    private static CreateUpdateItemDto updateItemDto;
+    private static CreateCommentDto createCommentDto;
+    private static Item item;
+    private static Item updatedItem;
+    private static Booking booking;
+    private static Comment comment;
+    private static List<Item> listOfItems;
 
-    @Test
-    public void save() {
-        User user = addUser("name1", "email1@mail.ru");
-        ItemDto itemDto = makeItemDto("item1", "description1");
-        service.save(itemDto, user.getId());
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        Item item = query.setParameter("name", itemDto.getName())
-                .getSingleResult();
-        assertThat(item.getId(), notNullValue());
-        assertThat(item.getName(), equalTo(itemDto.getName()));
-        assertThat(item.getDescription(), equalTo(itemDto.getDescription()));
-        assertThat(item.getAvailable(), equalTo(itemDto.getAvailable()));
+    @BeforeAll
+    static void beforeAll() {
+        currentTime = LocalDateTime.now();
+
+        user = User.builder()
+                .id(1L)
+                .name("userName")
+                .email("email@ya.ru")
+                .build();
+
+        request = ItemRequest.builder()
+                .id(1L)
+                .description("request description")
+                .requester(user)
+                .created(currentTime)
+                .items(new HashSet<>())
+                .build();
+
+        createItemDto = CreateUpdateItemDto.builder()
+                .name("itemName")
+                .description("itemDescription")
+                .available(true)
+                .requestId(1L)
+                .build();
+
+        updateItemDto = CreateUpdateItemDto.builder()
+                .name("updatedName")
+                .description("updatedDescription")
+                .available(false)
+                .build();
+
+        createCommentDto = CreateCommentDto.builder()
+                .text("comment")
+                .build();
+
+        item = Item.builder()
+                .id(1L)
+                .name("itemName")
+                .description("itemDescription")
+                .available(true)
+                .request(request)
+                .owner(user)
+                .bookings(Set.of())
+                .comments(null)
+                .build();
+
+        updatedItem = Item.builder()
+                .id(1L)
+                .name("updatedName")
+                .description("updatedDescription")
+                .available(false)
+                .request(request)
+                .request(request)
+                .owner(user)
+                .bookings(Set.of())
+                .comments(null)
+                .build();
+
+        booking = Booking.builder()
+                .id(1L)
+                .item(item)
+                .booker(user)
+                .status(BookingStatus.APPROVED)
+                .startDate(LocalDateTime.now().minusDays(2))
+                .endDate(LocalDateTime.now().minusDays(1))
+                .build();
+
+        comment = Comment.builder()
+                .id(1L)
+                .text("comment")
+                .author(user)
+                .created(LocalDateTime.now())
+                .build();
+
+        item.setBookings(Set.of(booking));
+
+        listOfItems = new ArrayList<>();
+        for (int i = 1; i < 21; i++) {
+            listOfItems.add(item.toBuilder().id(i + 1L).build());
+        }
+    }
+
+    @BeforeEach
+    void setUp() {
+        itemStorage = Mockito.mock(ItemStorage.class);
+        userStorage = Mockito.mock(UserStorage.class);
+        commentStorage = Mockito.mock(CommentStorage.class);
+        itemRequestStorage = Mockito.mock(ItemRequestStorage.class);
+        itemService = new ItemServiceImpl(itemStorage, userStorage, commentStorage, bookingStorage, itemRequestStorage);
     }
 
     @Test
-    public void update() {
-        User user = addUser("name2", "email2@mail.ru");
-        ItemDto itemDto = makeItemDto("item2", "description2");
-        service.save(itemDto, user.getId());
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        Item item = query.setParameter("name", itemDto.getName())
-                .getSingleResult();
+    void shouldCreateItemWithRequest() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(itemRequestStorage.findById(anyLong()))
+                .thenReturn(Optional.of(request));
+        when(commentStorage.findById(anyLong()))
+                .thenReturn(null);
+        when(itemStorage.save(any(Item.class)))
+                .thenReturn(item);
 
-        itemDto.setName("updateName");
-        itemDto.setDescription("updateDescription");
-        itemDto.setAvailable(false);
-        service.update(itemDto, item.getId(), user.getId());
-        TypedQuery<Item> query2 = em.createQuery("Select i from Item i where i.id = :id", Item.class);
-        Item updatedItem = query2.setParameter("id", item.getId())
-                .getSingleResult();
+        GetItemDto itemDto = itemService.create(user.getId(), createItemDto);
 
-        assertThat(updatedItem.getId(), notNullValue());
-        assertThat(updatedItem.getName(), equalTo(itemDto.getName()));
-        assertThat(updatedItem.getDescription(), equalTo(itemDto.getDescription()));
-        assertThat(updatedItem.getAvailable(), equalTo(itemDto.getAvailable()));
+        assertThat(itemDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("name", createItemDto.getName())
+                .hasFieldOrPropertyWithValue("description", createItemDto.getDescription())
+                .hasFieldOrPropertyWithValue("requestId", 1L)
+                .hasFieldOrPropertyWithValue("lastBooking", null)
+                .hasFieldOrPropertyWithValue("nextBooking", null)
+                .hasFieldOrPropertyWithValue("comments", new TreeSet<>(orderByCreatedDesc));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, times(1)).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, times(1)).save(any(Item.class));
     }
 
     @Test
-    public void getById() {
-        User user = addUser("name3", "email3@mail.ru");
-        ItemDto itemDto = makeItemDto("item3", "description3");
-        service.save(itemDto, user.getId());
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        Item item = query.setParameter("name", itemDto.getName())
-                .getSingleResult();
+    void shouldGetExceptionWithCreateWithNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemRequestStorage.findById(anyLong()))
+                .thenReturn(Optional.of(request));
+        when(commentStorage.findById(anyLong()))
+                .thenReturn(null);
+        when(itemStorage.save(any(Item.class)))
+                .thenReturn(item);
 
-        ItemResponseDto itemResponseDto = service.getById(item.getId(), user.getId());
-        assertThat(itemResponseDto.getId(), equalTo(item.getId()));
-        assertThat(itemResponseDto.getName(), equalTo(item.getName()));
-        assertThat(itemResponseDto.getDescription(), equalTo(item.getDescription()));
-        assertThat(itemResponseDto.getAvailable(), equalTo(item.getAvailable()));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.create(1L, createItemDto)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).save(any(Item.class));
     }
 
     @Test
-    public void getAll() {
-        User user = addUser("name4", "email4@mail.ru");
-        Integer from = 0;
-        Integer size = 10;
-        ItemDto itemDto = makeItemDto("item4", "description4");
-        service.save(itemDto, user.getId());
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        Item item = query.setParameter("name", itemDto.getName())
-                .getSingleResult();
-        List<ItemResponseDto> items = service.getAll(user.getId(), from, size);
+    void shouldGetExceptionWithCreateWithNotFoundRequest() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(itemRequestStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(commentStorage.findById(anyLong()))
+                .thenReturn(null);
+        when(itemStorage.save(any(Item.class)))
+                .thenReturn(item);
 
-        assertThat(items, hasSize(1));
-        assertThat(items.get(0).getId(), equalTo(item.getId()));
-        assertThat(items.get(0).getName(), equalTo(item.getName()));
-        assertThat(items.get(0).getDescription(), equalTo(item.getDescription()));
-        assertThat(items.get(0).getAvailable(), equalTo(item.getAvailable()));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.create(1L, createItemDto)
+        );
+
+        assertEquals("Запрос на вещь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, times(1)).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).save(any(Item.class));
     }
 
     @Test
-    public void search() {
-        User user = addUser("name4", "email4@mail.ru");
-        ItemDto itemDto = makeItemDto("item5", "description5");
-        Integer from = 0;
-        Integer size = 10;
-        service.save(itemDto, user.getId());
-        List<ItemResponseDto> items = service.search(itemDto.getName(), from, size);
+    void shouldGetExceptionWithUpdateItemWithNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemRequestStorage.findById(anyLong()))
+                .thenReturn(Optional.of(request));
+        when(commentStorage.findById(anyLong()))
+                .thenReturn(null);
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.of(item.toBuilder().build()));
+        when(itemStorage.save(updatedItem))
+                .thenReturn(updatedItem);
 
-        assertThat(items, hasSize(1));
-        assertThat(items.get(0).getId(), notNullValue());
-        assertThat(items.get(0).getName(), equalTo(itemDto.getName()));
-        assertThat(items.get(0).getDescription(), equalTo(itemDto.getDescription()));
-        assertThat(items.get(0).getAvailable(), equalTo(itemDto.getAvailable()));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.update(1L, 1L, updateItemDto)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).save(any(Item.class));
     }
 
     @Test
-    public void saveComment() {
-        User user = addUser("userName", "user@mail.ru");
-        User booker = addUser("bookerName", "booker@mail.ru");
-        Item item = addItem(user.getId());
-        Booking booking = addBooking(item.getId(), booker.getId());
-        bookingService.update(user.getId(), true, booking.getId());
-        CommentDto commentDto = new CommentDto();
-        commentDto.setText("text");
-        CommentResponseDto commentResponseDto = service.saveComment(commentDto, item.getId(), user.getId());
-        assertThat(commentResponseDto.getId(), notNullValue());
-        assertThat(commentResponseDto.getText(), equalTo(commentDto.getText()));
-        assertThat(commentResponseDto.getCreated(), notNullValue());
+    void shouldGetExceptionWithDeleteItemWithNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemRequestStorage.findById(anyLong()))
+                .thenReturn(Optional.of(request));
+        when(commentStorage.findById(anyLong()))
+                .thenReturn(null);
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.of(item.toBuilder().build()));
+        doNothing().when(itemStorage).deleteById(anyLong());
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.delete(1L, 1L)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).deleteById(anyLong());
     }
 
-    private ItemDto makeItemDto(String name, String description) {
-        ItemDto itemDto = new ItemDto();
-        itemDto.setName(name);
-        itemDto.setDescription(description);
-        itemDto.setAvailable(true);
-        itemDto.setRequestId(1);
-        return itemDto;
+    @Test
+    void shouldGetExceptionGetByIdByWithNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.of(item.toBuilder().build()));
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.getOneById(1L, 1L)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
     }
 
-    private User addUser(String name, String email) {
-        UserDto userDto = new UserDto();
-        userDto.setName(name);
-        userDto.setEmail(email);
-        userService.save(userDto);
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        return query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
+    @Test
+    void shouldGetAllByUserIdByOwner() {
+        when(itemStorage.findAllByOwnerIdWithBookings(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfItems));
+
+        List<GetItemDto> items = itemService.getAllByUserId(1L, 7, 3);
+
+        assertThat(items)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> {
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L);
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("name", "itemName");
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("description", "itemDescription");
+                });
+        verify(userStorage, never()).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, times(1)).findAllByOwnerIdWithBookings(anyLong(), any(Pageable.class));
     }
 
-    private Item addItem(Integer userId) {
-        ItemDto itemDto = new ItemDto();
-        itemDto.setName("itemName");
-        itemDto.setDescription("description");
-        itemDto.setAvailable(true);
-        service.save(itemDto, userId);
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        return query.setParameter("name", itemDto.getName())
-                .getSingleResult();
+    @Test
+    void shouldGetAllByUserIdByNotOwner() {
+        when(itemStorage.findAllByOwnerIdWithBookings(anyLong(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfItems));
+
+        List<GetItemDto> items = itemService.getAllByUserId(2L, 7, 3);
+
+        assertThat(items)
+                .isEmpty();
+        verify(userStorage, never()).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, times(1)).findAllByOwnerIdWithBookings(anyLong(), any(Pageable.class));
     }
 
-    private Booking addBooking(Integer itemId, Integer bookerId) {
-        BookingDto bookingDto = new BookingDto();
-        bookingDto.setStart(LocalDateTime.parse("2023-01-02T12:13:14"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-02-02T12:13:14"));
-        bookingDto.setItemId(itemId);
-        bookingService.save(bookingDto, bookerId);
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b where b.booker.id = :id", Booking.class);
-        return query.setParameter("id", bookerId).getSingleResult();
+    @Test
+    void shouldSearch() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(itemStorage.search(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfItems));
+
+        List<GetItemDto> items = itemService.search(1L, "text", 7, 3);
+
+        assertThat(items)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> {
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L);
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("name", "itemName");
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("description", "itemDescription");
+                });
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, times(1)).search(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void shouldExceptionWithSearchNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemStorage.search(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfItems));
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.search(1L, "text", 7, 3)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).search(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetEmptyListWithSearchWithBlankText() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(itemStorage.search(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfItems));
+
+        List<GetItemDto> items = itemService.search(1L, " ", 7, 3);
+
+        assertThat(items)
+                .isEmpty();
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).search(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetExceptionWithCreateCommentWithNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.of(item));
+        when(commentStorage.save(any(Comment.class)))
+                .thenReturn(comment);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> itemService.createComment(1L, 1L, createCommentDto)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemRequestStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
+        verify(commentStorage, never()).save(any(Comment.class));
     }
 }

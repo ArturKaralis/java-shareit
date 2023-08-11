@@ -1,138 +1,244 @@
 package ru.practicum.shareit.user;
 
-import lombok.RequiredArgsConstructor;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import ru.practicum.shareit.user.dto.UserDto;
+import org.mockito.Mockito;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import ru.practicum.shareit.exception.AlreadyExistsException;
+import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.user.dto.CreateUpdateUserDto;
+import ru.practicum.shareit.user.dto.GetUserDto;
 import ru.practicum.shareit.user.model.User;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.transaction.Transactional;
-
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.allOf;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.hamcrest.Matchers.hasProperty;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@Transactional
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
-public class UserServiceImplTest {
+class UserServiceImplTest {
+    private static UserService userService;
+    private static UserStorage userStorage;
+    private static CreateUpdateUserDto createUserDto;
+    private static CreateUpdateUserDto updateNameUserDto;
+    private static CreateUpdateUserDto updateEmailUserDto;
+    private static GetUserDto getUserDto;
+    private static User getUser;
+    private static List<User> listOfUser;
 
-    private final EntityManager em;
-    private final UserService service;
+    @BeforeAll
+    static void beforeAll() {
+        createUserDto = CreateUpdateUserDto.builder()
+                .name("name")
+                .email("email@ya.ru")
+                .build();
 
-    @Test
-    public void saveUser() {
-        UserDto userDto = makeUserDto("name", "test@mail.ru");
+        getUser = User.builder()
+                .id(1L)
+                .name("name")
+                .email("email@ya.ru")
+                .build();
 
-        service.save(userDto);
+        getUserDto = GetUserDto.builder()
+                .id(1L)
+                .name("name")
+                .email("email@ya.ru")
+                .build();
 
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        User user = query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
+        updateNameUserDto = CreateUpdateUserDto.builder()
+                .name("newName")
+                .build();
 
-        assertThat(user.getId(), notNullValue());
-        assertThat(user.getName(), equalTo(userDto.getName()));
-        assertThat(user.getEmail(), equalTo(userDto.getEmail()));
+        updateEmailUserDto = CreateUpdateUserDto.builder()
+                .email("newMail@ya.ru")
+                .build();
+
+        listOfUser = new ArrayList<>();
+        for (int i = 1; i < 21; i++) {
+            listOfUser.add(getUser.toBuilder().id(i + 1L).build());
+        }
+    }
+
+    @BeforeEach
+    void setUp() {
+        userStorage = Mockito.mock(UserStorage.class);
+        userService = new UserServiceImpl(userStorage);
     }
 
     @Test
-    public void updateUser() {
-        UserDto userDto = makeUserDto("name", "test@mail.ru");
+    void shouldCreateUser() {
+        when(userStorage.save(any(User.class)))
+                .thenReturn(getUser.toBuilder().build());
 
-        service.save(userDto);
+        GetUserDto userDto = userService.create(createUserDto);
 
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        User user = query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
-
-
-        userDto.setName("updateName");
-        userDto.setEmail("update@mail.ru");
-
-        service.update(userDto, user.getId());
-
-        TypedQuery<User> query2 = em.createQuery("Select u from User u where u.id = :id", User.class);
-        User updatedUser = query2.setParameter("id", user.getId())
-                .getSingleResult();
-
-        assertThat(updatedUser.getId(), notNullValue());
-        assertThat(updatedUser.getName(), equalTo(userDto.getName()));
-        assertThat(updatedUser.getEmail(), equalTo(userDto.getEmail()));
+        assertThat(userDto)
+                .hasFieldOrPropertyWithValue("id", getUserDto.getId())
+                .hasFieldOrPropertyWithValue("name", getUserDto.getName())
+                .hasFieldOrPropertyWithValue("email", getUserDto.getEmail());
+        verify(userStorage, times(1)).save(any(User.class));
     }
 
     @Test
-    public void getAllUsers() {
-        List<UserDto> sourceUsers = List.of(
-                makeUserDto("Ivan","ivan@email"),
-                makeUserDto("Petr", "petr@email"),
-                makeUserDto("Vasilii", "vasilii@email")
+    void shouldGetAlreadyExistsExceptionCreateUser() {
+        when(userStorage.save(any(User.class)))
+                .thenThrow(new DataIntegrityViolationException("error"));
+
+        final AlreadyExistsException exception = Assertions.assertThrows(
+                AlreadyExistsException.class,
+                () -> userService.create(createUserDto)
         );
 
-        for (UserDto userDto : sourceUsers) {
-            User user = UserMapper.makeUser(userDto);
-            em.persist(user);
-        }
-        em.flush();
-
-        List<UserDto> targetUsers = service.getAll();
-
-        assertThat(targetUsers, hasSize(sourceUsers.size()));
-        for (UserDto sourceUser : sourceUsers) {
-            assertThat(targetUsers, hasItem(allOf(
-                    hasProperty("id", notNullValue()),
-                    hasProperty("name", equalTo(sourceUser.getName())),
-                    hasProperty("email", equalTo(sourceUser.getEmail()))
-            )));
-        }
+        assertEquals(String.format("Пользователь с %s уже зарегистрирован", createUserDto.getEmail()),
+                exception.getMessage());
+        verify(userStorage, times(1)).save(any(User.class));
     }
 
     @Test
-    void getUserById() {
-        UserDto userDto = makeUserDto("name", "test@mail.ru");
+    void shouldGetNotFoundExceptionWithUpdate() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
 
-        service.save(userDto);
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> userService.update(1L, updateNameUserDto)
+        );
 
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        User user = query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
-
-        UserDto userCheck = service.getById(user.getId());
-
-        assertThat(userCheck.getId(), notNullValue());
-        assertThat(userCheck.getId(), equalTo(user.getId()));
-        assertThat(userCheck.getName(), equalTo(userDto.getName()));
-        assertThat(userCheck.getEmail(), equalTo(userDto.getEmail()));
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void delete() {
-        UserDto userDto1 = makeUserDto("name1", "test1@mail.ru");
-        UserDto userDto2 = makeUserDto("name2", "test2@mail.ru");
-        service.save(userDto1);
-        service.save(userDto2);
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        User user1 = query.setParameter("email", userDto1.getEmail()).getSingleResult();
-        User user2 = query.setParameter("email", userDto2.getEmail()).getSingleResult();
-        service.delete(user1.getId());
-        List<UserDto> users = service.getAll();
-        assertThat(users, hasSize(1));
-        assertThat(users.get(0).getId(), equalTo(user2.getId()));
-        assertThat(users.get(0).getName(), equalTo(user2.getName()));
-        assertThat(users.get(0).getEmail(), equalTo(user2.getEmail()));
+    void shouldGetAlreadyExistsExceptionUpdateUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(getUser.toBuilder().build()));
+        when(userStorage.saveAndFlush(any(User.class)))
+                .thenThrow(new DataIntegrityViolationException("error"));
+
+        final AlreadyExistsException exception = Assertions.assertThrows(
+                AlreadyExistsException.class,
+                () -> userService.update(1L, updateEmailUserDto)
+        );
+
+        assertEquals(String.format("Пользователь с %s уже зарегистрирован", updateEmailUserDto.getEmail()),
+                exception.getMessage());
+        verify(userStorage, times(1)).saveAndFlush(any(User.class));
     }
 
-    private UserDto makeUserDto(String name, String email) {
-        UserDto userDto = new UserDto();
-        userDto.setName(name);
-        userDto.setEmail(email);
-        return userDto;
+    @Test
+    void shouldUpdateUserName() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(getUser.toBuilder().build()));
+        when(userStorage.saveAndFlush(any(User.class)))
+                .thenReturn(getUser.toBuilder().name(updateNameUserDto.getName()).build());
+
+        GetUserDto userDto = userService.update(1L, updateNameUserDto);
+
+        assertThat(userDto)
+                .hasFieldOrPropertyWithValue("id", getUserDto.getId())
+                .hasFieldOrPropertyWithValue("name", updateNameUserDto.getName())
+                .hasFieldOrPropertyWithValue("email", getUserDto.getEmail());
+        verify(userStorage, times(1)).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldUpdateUserEmail() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(getUser.toBuilder().build()));
+        when(userStorage.saveAndFlush(any(User.class)))
+                .thenReturn(getUser.toBuilder().email(updateEmailUserDto.getEmail()).build());
+
+        GetUserDto userDto = userService.update(1L, updateEmailUserDto);
+
+        assertThat(userDto)
+                .hasFieldOrPropertyWithValue("id", getUserDto.getId())
+                .hasFieldOrPropertyWithValue("name", getUserDto.getName())
+                .hasFieldOrPropertyWithValue("email", updateEmailUserDto.getEmail());
+        verify(userStorage, times(1)).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void shouldGetNotFoundExceptionWithDeleteById() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> userService.deleteById(1L)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+    }
+
+    @Test
+    void shouldDeleteById() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(getUser.toBuilder().build()));
+        doNothing().when(userStorage).deleteById(anyLong());
+
+        userService.deleteById(1L);
+
+        verify(userStorage, times(1)).deleteById(anyLong());
+    }
+
+    @Test
+    void shouldGetExceptionGetById() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> userService.getById(1L)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+    }
+
+    @Test
+    void shouldGetById() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(getUser.toBuilder().build()));
+
+        GetUserDto userDto = userService.getById(1L);
+
+        assertThat(userDto)
+                .hasFieldOrPropertyWithValue("id", getUserDto.getId())
+                .hasFieldOrPropertyWithValue("name", getUserDto.getName())
+                .hasFieldOrPropertyWithValue("email", getUserDto.getEmail());
+        verify(userStorage, times(1)).findById(anyLong());
+    }
+
+    @Test
+    void shouldGetAll() {
+
+        when(userStorage.findAll(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(listOfUser));
+        List<GetUserDto> listUsers = userService.getAll(1, 5);
+
+        assertThat(listUsers)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> {
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L);
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("name", "name");
+                    assertThat(list.get(0)).hasFieldOrPropertyWithValue("email", "email@ya.ru");
+                });
+        verify(userStorage, times(1)).findAll(any(Pageable.class));
     }
 }

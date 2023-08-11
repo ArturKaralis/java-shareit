@@ -1,200 +1,243 @@
 package ru.practicum.shareit.request;
 
-import lombok.RequiredArgsConstructor;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import ru.practicum.shareit.item.ItemService;
-import ru.practicum.shareit.item.dto.ItemDto;
-import ru.practicum.shareit.item.model.Item;
-import ru.practicum.shareit.request.dto.ItemRequestDto;
-import ru.practicum.shareit.request.dto.ItemRequestResponseDto;
-import ru.practicum.shareit.request.impl.ItemRequestServiceImpl;
-import ru.practicum.shareit.request.model.ItemRequest;
-import ru.practicum.shareit.user.UserService;
-import ru.practicum.shareit.user.dto.UserDto;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.request.dto.CreateItemRequestDto;
+import ru.practicum.shareit.request.dto.GetItemRequestDto;
+
+import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.user.model.User;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.transaction.Transactional;
-
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 
-import static org.hamcrest.CoreMatchers.allOf;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.hamcrest.Matchers.hasProperty;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@Transactional
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
-public class ItemRequestServiceImplTest {
+class ItemRequestServiceImplTest {
+    private static ItemRequestService requestService;
+    private static UserStorage userStorage;
+    private static ItemRequestStorage requestStorage;
 
-    private final EntityManager em;
-    private final ItemRequestServiceImpl service;
-    private final UserService userService;
-    private final ItemService itemService;
-    private final ItemRequestService itemRequestService;
+    private static User user;
+    private static ItemRequest request;
+    private static LocalDateTime currentTime;
+    private static CreateItemRequestDto requestDto;
+    private static List<ItemRequest> listOfRequests;
 
-    @Test
-    public void save() {
-        User user = addUser("name1", "email1@email.ru");
-        ItemRequestDto itemRequestDto = makeItemRequestDto("description");
-        service.save(user.getId(), itemRequestDto);
-        TypedQuery<ItemRequest> query = em.createQuery("select i from ItemRequest i " +
-                "where i.requesterId = :requesterId", ItemRequest.class);
-        ItemRequest itemRequest = query.setParameter("requesterId", user.getId()).getSingleResult();
+    @BeforeAll
+    static void beforeAll() {
+        currentTime = LocalDateTime.now();
 
-        assertThat(itemRequest.getId(), notNullValue());
-        assertThat(itemRequest.getDescription(), equalTo(itemRequestDto.getDescription()));
-        assertThat(itemRequest.getRequesterId(), equalTo(user.getId()));
-        assertThat(itemRequest.getCreated(), notNullValue());
-    }
+        user = User.builder()
+                .id(1L)
+                .name("userName")
+                .email("email@ya.ru")
+                .build();
 
-    @Test
-    public void findAll() {
-        User user = addUser("name2", "email2@email.ru");
-        User requester = addUser("name3", "email3@email.ru");
-        Integer from = 0;
-        Integer size = 10;
-        List<ItemRequestDto> sourceRequests = List.of(
-                makeItemRequestDto("description 1"),
-                makeItemRequestDto("description 2"),
-                makeItemRequestDto("description 3"));
-        for (ItemRequestDto itemRequestDto : sourceRequests) {
-            ItemRequest itemRequest = ItemRequestMapper.makeItemRequest(itemRequestDto);
-            itemRequest.setRequesterId(requester.getId());
-            em.persist(itemRequest);
-        }
-        em.flush();
-        List<ItemRequestResponseDto> targetRequests = service.findAll(user.getId(), from, size);
+        request = ItemRequest.builder()
+                .id(1L)
+                .description("request description")
+                .requester(user)
+                .created(currentTime)
+                .items(new HashSet<>())
+                .build();
 
-        assertThat(targetRequests, hasSize(sourceRequests.size()));
-        for (ItemRequestDto sourceRequest : sourceRequests) {
-            assertThat(targetRequests, hasItem(allOf(
-                    hasProperty("id", notNullValue()),
-                    hasProperty("description", equalTo(sourceRequest.getDescription())),
-                    hasProperty("created", notNullValue())
-            )));
+        requestDto = CreateItemRequestDto.builder()
+                .description("request description")
+                .build();
+
+        listOfRequests = new ArrayList<>();
+        for (int i = 1; i < 21; i++) {
+            listOfRequests.add(request.toBuilder().id(i + 1L).build());
         }
     }
 
-    @Test
-    public void findAllOwn() {
-        User user = addUser("name3", "email3@email.ru");
-        List<ItemRequestDto> sourceRequests = List.of(
-                makeItemRequestDto("description 1"),
-                makeItemRequestDto("description 2"),
-                makeItemRequestDto("description 3"));
-        for (ItemRequestDto itemRequestDto : sourceRequests) {
-            ItemRequest itemRequest = ItemRequestMapper.makeItemRequest(itemRequestDto);
-            itemRequest.setRequesterId(user.getId());
-            em.persist(itemRequest);
-        }
-        em.flush();
-        List<ItemRequestResponseDto> targetRequests = service.findAllOwn(user.getId());
-
-        assertThat(targetRequests, hasSize(sourceRequests.size()));
-        for (ItemRequestDto sourceRequest : sourceRequests) {
-            assertThat(targetRequests, hasItem(allOf(
-                    hasProperty("id", notNullValue()),
-                    hasProperty("description", equalTo(sourceRequest.getDescription())),
-                    hasProperty("created", notNullValue())
-            )));
-        }
+    @BeforeEach
+    void setUp() {
+        userStorage = Mockito.mock(UserStorage.class);
+        requestStorage = Mockito.mock(ItemRequestStorage.class);
+        requestService = new ItemRequestServiceImpl(requestStorage, userStorage);
     }
 
     @Test
-    public void findById() {
-        User user = addUser("name4", "email4@email.ru");
-        ItemRequestDto itemRequestDto = makeItemRequestDto("description");
-        service.save(user.getId(), itemRequestDto);
-        TypedQuery<ItemRequest> query = em.createQuery("select i from ItemRequest i " +
-                "where i.requesterId = :requesterId", ItemRequest.class);
-        ItemRequest itemRequest = query.setParameter("requesterId", user.getId()).getSingleResult();
+    void shouldCreateRequest() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(requestStorage.save(any(ItemRequest.class)))
+                .thenReturn(request);
 
-        ItemRequestResponseDto itemRequestResponseDto = service.findById(user.getId(), itemRequest.getId());
-        assertThat(itemRequestResponseDto.getId(), equalTo(itemRequest.getId()));
-        assertThat(itemRequestResponseDto.getDescription(), equalTo(itemRequest.getDescription()));
-        assertThat(itemRequestResponseDto.getCreated(), equalTo(itemRequest.getCreated()));
+        GetItemRequestDto getItemRequestDto = requestService.createRequest(user.getId(), requestDto);
+
+        assertThat(getItemRequestDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("description", requestDto.getDescription())
+                .hasFieldOrProperty("created")
+                .hasFieldOrPropertyWithValue("items", new ArrayList<>());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, times(1)).save(any(ItemRequest.class));
     }
 
     @Test
-    public void setItemsForAllOwn() {
-        User user = addUser("userName", "useer@mail.ru");
-        ItemDto itemDto = new ItemDto();
-        itemDto.setName("itemName");
-        itemDto.setDescription("description");
-        itemDto.setAvailable(true);
-        itemDto.setRequestId(11);
-        itemService.save(itemDto, user.getId());
-        TypedQuery<Item> query = em.createQuery("select i from Item i " +
-                "where i.owner.id = :ownerId", Item.class);
-        Item item = query.setParameter("ownerId", user.getId()).getSingleResult();
-        ItemRequestDto itemRequestDto = makeItemRequestDto("description");
-        itemRequestService.save(user.getId(), itemRequestDto);
-        TypedQuery<ItemRequest> query2 = em.createQuery("select ir from ItemRequest ir " +
-                "where ir.description = :description", ItemRequest.class);
-        ItemRequest itemRequest = query2.setParameter("description", itemRequestDto.getDescription())
-                .getSingleResult();
-        item.setItemRequest(itemRequest);
-        ItemRequestResponseDto itemRequestResponseDto = ItemRequestMapper.makeItemRequestDto(itemRequest);
-        List<ItemRequestResponseDto> itemsRequestsDto = new ArrayList<>();
-        itemsRequestsDto.add(itemRequestResponseDto);
-        List<ItemRequestResponseDto> addItem = service.setItemsForAllOwn(itemsRequestsDto, user.getId());
-        assertThat(addItem, hasSize(1));
-        assertThat(addItem.get(0).getId(), notNullValue());
-        assertThat(addItem.get(0).getDescription(), equalTo(itemRequestResponseDto.getDescription()));
-        assertThat(addItem.get(0).getItems(), hasSize(1));
+    void shouldGetExceptionWithCreateRequestNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(requestStorage.save(any(ItemRequest.class)))
+                .thenReturn(request);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> requestService.createRequest(user.getId(), requestDto)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, never()).save(any(ItemRequest.class));
     }
 
     @Test
-    public void setItemsForAll() {
-        User user1 = addUser("userName1", "useer1@mail.ru");
-        User user2 = addUser("userName2", "useer2@mail.ru");
-        ItemDto itemDto = new ItemDto();
-        itemDto.setName("itemName");
-        itemDto.setDescription("description");
-        itemDto.setAvailable(true);
-        itemDto.setRequestId(11);
-        itemService.save(itemDto, user1.getId());
-        TypedQuery<Item> query1 = em.createQuery("select i from Item i " +
-                "where i.owner.id = :ownerId", Item.class);
-        Item item = query1.setParameter("ownerId", user1.getId()).getSingleResult();
-        ItemRequestDto itemRequestDto = makeItemRequestDto("description1");
-        itemRequestService.save(user1.getId(), itemRequestDto);
-        TypedQuery<ItemRequest> query2 = em.createQuery("select ir from ItemRequest ir " +
-                "where ir.description = :description", ItemRequest.class);
-        ItemRequest itemRequest = query2.setParameter("description", itemRequestDto.getDescription())
-                .getSingleResult();
-        item.setItemRequest(itemRequest);
-        ItemRequestResponseDto itemRequestResponseDto = ItemRequestMapper.makeItemRequestDto(itemRequest);
-        List<ItemRequestResponseDto> itemsRequestsDto = new ArrayList<>();
-        itemsRequestsDto.add(itemRequestResponseDto);
-        List<ItemRequestResponseDto> addItem = service.setItemsForAll(itemsRequestsDto, user2.getId());
-        assertThat(addItem, hasSize(1));
-        assertThat(addItem.get(0).getId(), notNullValue());
-        assertThat(addItem.get(0).getDescription(), equalTo(itemRequestResponseDto.getDescription()));
-        assertThat(addItem.get(0).getItems(), hasSize(1));
+    void shouldGetRequestById() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(requestStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(request));
+
+        GetItemRequestDto getItemRequestDto = requestService.getRequestById(user.getId(), request.getId());
+
+        assertThat(getItemRequestDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("description", requestDto.getDescription())
+                .hasFieldOrProperty("created")
+                .hasFieldOrPropertyWithValue("items", new ArrayList<>());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, times(1)).findById(anyLong());
     }
 
-    private ItemRequestDto makeItemRequestDto(String description) {
-        ItemRequestDto itemRequestDto = new ItemRequestDto();
-        itemRequestDto.setDescription(description);
-        return itemRequestDto;
+    @Test
+    void shouldGetExceptionWithRequestByIdNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(requestStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(request));
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> requestService.getRequestById(user.getId(), request.getId())
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, never()).findById(anyLong());
     }
 
-    private User addUser(String name, String email) {
-        UserDto userDto = new UserDto();
-        userDto.setName(name);
-        userDto.setEmail(email);
-        userService.save(userDto);
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        return query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
+    @Test
+    void shouldGetExceptionWithRequestByIdNotFoundRequest() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(requestStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> requestService.getRequestById(user.getId(), request.getId())
+        );
+
+        assertEquals("Запрос на вещь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, times(1)).findById(anyLong());
+    }
+
+    @Test
+    void shouldGetAllRequestsByUserId() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(requestStorage.getAllByRequester(any(User.class), any(Sort.class)))
+                .thenReturn(listOfRequests);
+
+        List<GetItemRequestDto> requests = requestService.getAllRequestsByUserId(user.getId());
+
+        assertThat(requests)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L)
+                        .hasFieldOrPropertyWithValue("description", requestDto.getDescription())
+                        .hasFieldOrProperty("created")
+                        .hasFieldOrPropertyWithValue("items", new ArrayList<>()));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, times(1)).getAllByRequester(any(User.class), any(Sort.class));
+    }
+
+    @Test
+    void shouldGetExceptionWithGetAllRequestsByUserIdNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(requestStorage.getAllByRequester(any(User.class), any(Sort.class)))
+                .thenReturn(listOfRequests);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> requestService.getAllRequestsByUserId(user.getId())
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, never()).getAllByRequester(any(User.class), any(Sort.class));
+    }
+
+    @Test
+    void shouldGetAllRequests() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.of(user));
+        when(requestStorage.getAllByRequesterNot(any(User.class), any(Pageable.class)))
+                .thenReturn(listOfRequests);
+
+        List<GetItemRequestDto> requests = requestService.getAllRequests(user.getId(), 7, 3);
+
+        assertThat(requests)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L)
+                        .hasFieldOrPropertyWithValue("description", requestDto.getDescription())
+                        .hasFieldOrProperty("created")
+                        .hasFieldOrPropertyWithValue("items", new ArrayList<>()));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, times(1)).getAllByRequesterNot(any(User.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetExceptionWithGetAllRequestsNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(requestStorage.getAllByRequesterNot(any(User.class), any(Pageable.class)))
+                .thenReturn(listOfRequests);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> requestService.getAllRequests(user.getId(), 7, 3)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(requestStorage, never()).getAllByRequesterNot(any(User.class), any(Pageable.class));
     }
 }

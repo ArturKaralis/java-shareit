@@ -1,97 +1,236 @@
 package ru.practicum.shareit.request;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import ru.practicum.shareit.request.dto.ItemRequestResponseDto;
+import ru.practicum.shareit.request.dto.CreateItemRequestDto;
+import ru.practicum.shareit.request.dto.GetItemRequestDto;
 
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static ru.practicum.shareit.util.Constants.REQUEST_HEADER_USER_ID;
 
-@WebMvcTest(ItemRequestController.class)
-@AutoConfigureMockMvc
-public class ItemRequestControllerTest {
+@WebMvcTest(controllers = ItemRequestController.class)
+class ItemRequestControllerTest {
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockBean
-    private ItemRequestService itemRequestService;
-    private final ObjectMapper mapper = new ObjectMapper();
-    @Autowired
-    private MockMvc mvc;
-    private ItemRequestResponseDto itemRequestDto;
+    private ItemRequestService requestService;
 
-    @BeforeEach
-    void setUp() {
-        itemRequestDto = new ItemRequestResponseDto();
-        itemRequestDto.setId(1);
-        itemRequestDto.setDescription("description");
+    private static CreateItemRequestDto correctRequest;
+    private static CreateItemRequestDto requestWithBlankDescription;
+    private static CreateItemRequestDto requestWithDescriptionSize1001;
+    private static GetItemRequestDto getItemRequestDto;
+    private static List<GetItemRequestDto> listOfRequests;
+
+    @BeforeAll
+    static void beforeAll() {
+        correctRequest = CreateItemRequestDto.builder()
+                .description("description")
+                .build();
+
+        requestWithBlankDescription = CreateItemRequestDto.builder()
+                .description(" ")
+                .build();
+
+        requestWithDescriptionSize1001 = CreateItemRequestDto.builder()
+                .description("A".repeat(1001))
+                .build();
+
+        getItemRequestDto = GetItemRequestDto.builder()
+                .id(1L)
+                .description("description")
+                .build();
+
+        listOfRequests = new ArrayList<>();
+        for (int i = 1; i < 21; i++) {
+            listOfRequests.add(getItemRequestDto.toBuilder().id(i + 1L).build());
+        }
     }
 
     @Test
-    public void save() throws Exception {
-        when(itemRequestService.save(anyInt(), any()))
-                .thenReturn(itemRequestDto);
-        mvc.perform(post("/requests")
-                        .header("X-Sharer-User-Id", 1)
-                        .content(mapper.writeValueAsString(itemRequestDto))
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemRequestDto.getId())))
-                .andExpect(jsonPath("$.description", is(itemRequestDto.getDescription())));
+    void shouldExceptionWithCreateRequestWithoutHeader() throws Exception {
+        when(requestService.createRequest(anyLong(), any(CreateItemRequestDto.class)))
+                .thenReturn(getItemRequestDto);
+
+        String jsonRequest = objectMapper.writeValueAsString(correctRequest);
+
+        mockMvc.perform(post("/requests")
+                        .content(jsonRequest)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).createRequest(anyLong(), any(CreateItemRequestDto.class));
     }
 
     @Test
-    public void findAllOwn() throws Exception {
-        when(itemRequestService.findAllOwn(anyInt()))
-                .thenReturn(List.of(itemRequestDto));
+    void shouldExceptionWithCreateRequestWithRequestWithBlankDescription() throws Exception {
+        when(requestService.createRequest(anyLong(), any(CreateItemRequestDto.class)))
+                .thenReturn(getItemRequestDto);
 
-        mvc.perform(get("/requests")
-                        .header("X-Sharer-User-Id", 1))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", is(itemRequestDto.getId())))
-                .andExpect(jsonPath("$[0].description", is(itemRequestDto.getDescription())));
+        String jsonRequest = objectMapper.writeValueAsString(requestWithBlankDescription);
+
+        mockMvc.perform(post("/requests")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .content(jsonRequest)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).createRequest(anyLong(), any(CreateItemRequestDto.class));
     }
 
     @Test
-    public void findAll() throws Exception {
-        when(itemRequestService.findAll(anyInt(), anyInt(), anyInt()))
-                .thenReturn(List.of(itemRequestDto));
+    void shouldCreateRequest() throws Exception {
+        when(requestService.createRequest(anyLong(), any(CreateItemRequestDto.class)))
+                .thenReturn(getItemRequestDto);
 
-        mvc.perform(get("/requests/all")
-                        .header("X-Sharer-User-Id", 1))
+        String jsonRequest = objectMapper.writeValueAsString(correctRequest);
+
+        mockMvc.perform(post("/requests")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .content(jsonRequest)
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", is(itemRequestDto.getId())))
-                .andExpect(jsonPath("$[0].description", is(itemRequestDto.getDescription())));
+                .andExpect(jsonPath("$.id").value(getItemRequestDto.getId()))
+                .andExpect(jsonPath("$.description").value(getItemRequestDto.getDescription()));
+        verify(requestService, times(1)).createRequest(anyLong(), any(CreateItemRequestDto.class));
     }
 
     @Test
-    public void findById() throws Exception {
-        when(itemRequestService.findById(anyInt(), anyInt()))
-                .thenReturn(itemRequestDto);
+    void shouldExceptionWithGetAllRequestsByUserIdWithRequestWithoutHeader() throws Exception {
+        when(requestService.getAllRequestsByUserId(anyLong()))
+                .thenReturn(listOfRequests);
 
-        mvc.perform(get("/requests/1")
-                        .header("X-Sharer-User-Id", 1))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemRequestDto.getId())))
-                .andExpect(jsonPath("$.description", is(itemRequestDto.getDescription())));
+        mockMvc.perform(get("/requests")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getAllRequestsByUserId(anyLong());
     }
 
+    @Test
+    void shouldGetAllRequestsByUserId() throws Exception {
+        when(requestService.getAllRequestsByUserId(anyLong()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.[*]").exists())
+                .andExpect(jsonPath("$.[*]").isNotEmpty())
+                .andExpect(jsonPath("$.[*]").isArray())
+                .andExpect(jsonPath("$.size()").value(20))
+                .andExpect(jsonPath("$.[0].id").value(2L))
+                .andExpect(jsonPath("$.[19].id").value(21L));
+        verify(requestService, times(1)).getAllRequestsByUserId(anyLong());
+    }
+
+    @Test
+    void shouldExceptionWithGetAllRequestsWithRequestWithoutHeader() throws Exception {
+        when(requestService.getAllRequests(anyLong(), anyInt(), anyInt()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests/all")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getAllRequests(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldExceptionWithGetAllRequestsWithFromLessThen0() throws Exception {
+        when(requestService.getAllRequests(anyLong(), anyInt(), anyInt()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests/all?from=-1")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getAllRequests(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldExceptionWithGetAllRequestsWithSizeLessThen1() throws Exception {
+        when(requestService.getAllRequests(anyLong(), anyInt(), anyInt()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests/all?size=0")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getAllRequests(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldExceptionWithGetAllRequestsWithSizeMoreThen20() throws Exception {
+        when(requestService.getAllRequests(anyLong(), anyInt(), anyInt()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests/all?size=21")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getAllRequests(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldGetAllRequests() throws Exception {
+        when(requestService.getAllRequests(anyLong(), anyInt(), anyInt()))
+                .thenReturn(listOfRequests);
+
+        mockMvc.perform(get("/requests/all")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.[*]").exists())
+                .andExpect(jsonPath("$.[*]").isNotEmpty())
+                .andExpect(jsonPath("$.[*]").isArray())
+                .andExpect(jsonPath("$.size()").value(20))
+                .andExpect(jsonPath("$.[0].id").value(2L))
+                .andExpect(jsonPath("$.[19].id").value(21L));
+        verify(requestService, times(1)).getAllRequests(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldExceptionWithGetRequestByIdWithRequestWithoutHeader() throws Exception {
+        when(requestService.getRequestById(anyLong(), anyLong()))
+                .thenReturn(getItemRequestDto);
+
+        mockMvc.perform(get("/requests/1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+        verify(requestService, never()).getRequestById(anyLong(), anyLong());
+    }
+
+    @Test
+    void shouldGetRequestById() throws Exception {
+        when(requestService.getRequestById(anyLong(), anyLong()))
+                .thenReturn(getItemRequestDto);
+
+        mockMvc.perform(get("/requests/1")
+                        .header(REQUEST_HEADER_USER_ID, "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(getItemRequestDto.getId()))
+                .andExpect(jsonPath("$.description").value(getItemRequestDto.getDescription()));
+        verify(requestService, times(1)).getRequestById(anyLong(), anyLong());
+    }
 }

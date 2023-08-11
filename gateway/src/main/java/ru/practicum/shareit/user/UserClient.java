@@ -1,5 +1,6 @@
 package ru.practicum.shareit.user;
 
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -8,11 +9,12 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 import ru.practicum.shareit.client.BaseClient;
-import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.user.dto.CreateUpdateUserDto;
+
+import java.util.Map;
 
 @Service
 public class UserClient extends BaseClient {
-
     private static final String API_PREFIX = "/users";
 
     @Autowired
@@ -25,23 +27,26 @@ public class UserClient extends BaseClient {
         );
     }
 
-    public ResponseEntity<Object> getAll() {
-        return get("");
+    public ResponseEntity<Object> getAll(int from, int size) {
+        Map<String, Object> parameters = Map.of(
+                "from", from,
+                "size", size);
+        return get("", null, parameters);
     }
 
-    public ResponseEntity<Object> getById(Integer userId) {
+    public ResponseEntity<Object> getById(long userId) {
         return get("/" + userId);
     }
 
-    public ResponseEntity<Object> save(UserDto userDto) {
-        return post("", userDto);
+    public ResponseEntity<Object> create(CreateUpdateUserDto createUpdateUserDto) {
+        return post("", createUpdateUserDto);
     }
 
-    public ResponseEntity<Object> update(UserDto userDto, Integer userId) {
-        return patch("/" + userId, userDto);
+    public ResponseEntity<Object> update(long userId, CreateUpdateUserDto createUpdateUserDto) {
+        return patch("/" + userId, createUpdateUserDto);
     }
 
-    public void delete(Integer userId) {
-        delete("/" + userId);
+    public ResponseEntity<Object> deleteById(long userId) {
+        return delete("/" + userId);
     }
 }

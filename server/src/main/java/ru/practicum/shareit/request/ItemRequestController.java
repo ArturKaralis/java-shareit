@@ -1,51 +1,63 @@
 package ru.practicum.shareit.request;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
-import ru.practicum.shareit.request.dto.ItemRequestDto;
-import ru.practicum.shareit.request.dto.ItemRequestResponseDto;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpServletRequest;
+import javax.validation.constraints.Min;
+
+/**
+ * TODO Sprint add-item-requests.
+ */
+
+
+import ru.practicum.shareit.marker.ToLog;
+import ru.practicum.shareit.request.dto.CreateItemRequestDto;
+import ru.practicum.shareit.request.dto.GetItemRequestDto;
+
+import javax.validation.Valid;
+import javax.validation.constraints.Max;
+
 import java.util.List;
+
+import static ru.practicum.shareit.util.Constants.REQUEST_HEADER_USER_ID;
 
 @RestController
 @RequestMapping(path = "/requests")
 @RequiredArgsConstructor
-@Slf4j
+@Validated
+@ToLog
 public class ItemRequestController {
-
     private final ItemRequestService itemRequestService;
 
+    @PostMapping
+    public GetItemRequestDto createRequest(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
+                                           @RequestBody @Valid CreateItemRequestDto itemRequestDto) {
+        return itemRequestService.createRequest(userId, itemRequestDto);
+    }
+
     @GetMapping
-    public List<ItemRequestResponseDto> findAllOwn(@RequestHeader("X-Sharer-User-Id") Integer userId,
-                                                   HttpServletRequest request) {
-        log.info("Получен {} запрос {}", request.getMethod(), request.getRequestURI());
-        return itemRequestService.findAllOwn(userId);
+    public List<GetItemRequestDto> getAllRequestsByUserId(@RequestHeader(REQUEST_HEADER_USER_ID) long userId) {
+        return itemRequestService.getAllRequestsByUserId(userId);
     }
 
     @GetMapping("/all")
-    public List<ItemRequestResponseDto> findAll(@RequestHeader("X-Sharer-User-Id") Integer userId,
-                                         @RequestParam(defaultValue = "0") Integer from,
-                                         @RequestParam(defaultValue = "10") Integer size,
-                                         HttpServletRequest request) {
-        log.info("Получен {} запрос {}", request.getMethod(), request.getRequestURI());
-        return itemRequestService.findAll(userId, from, size);
+    public List<GetItemRequestDto> getAllRequests(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
+                                                  @RequestParam(defaultValue = "0") @Min(0) @Max(Integer.MAX_VALUE) int from,
+                                                  @RequestParam(defaultValue = "20") @Min(1) @Max(20) int size) {
+        return itemRequestService.getAllRequests(userId, from, size);
     }
 
     @GetMapping("/{requestId}")
-    public ItemRequestResponseDto findById(@RequestHeader("X-Sharer-User-Id") Integer userId,
-                                           @PathVariable Integer requestId,
-                                           HttpServletRequest request) {
-        log.info("Получен {} запрос {}", request.getMethod(), request.getRequestURI());
-        return itemRequestService.findById(userId, requestId);
-    }
-
-    @PostMapping
-    public ItemRequestResponseDto save(@RequestHeader("X-Sharer-User-Id") Integer userId,
-                                       @RequestBody ItemRequestDto itemRequestDto,
-                                       HttpServletRequest request) {
-        log.info("Получен {} запрос {}", request.getMethod(), request.getRequestURI());
-        return itemRequestService.save(userId, itemRequestDto);
+    public GetItemRequestDto getRequestById(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
+                                            @PathVariable long requestId) {
+        return itemRequestService.getRequestById(userId, requestId);
     }
 }

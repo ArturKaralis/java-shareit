@@ -1,413 +1,578 @@
 package ru.practicum.shareit.booking;
 
-import lombok.RequiredArgsConstructor;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import ru.practicum.shareit.booking.dto.BookingDto;
-import ru.practicum.shareit.booking.dto.BookingResponseDto;
-import ru.practicum.shareit.booking.enums.State;
-import ru.practicum.shareit.booking.enums.Status;
+import org.mockito.Mockito;
+import org.springframework.data.domain.Pageable;
+import ru.practicum.shareit.booking.dto.CreateBookingDto;
+import ru.practicum.shareit.booking.dto.GetBookingDto;
+import ru.practicum.shareit.booking.enam.BookingStatus;
 import ru.practicum.shareit.booking.model.Booking;
-import ru.practicum.shareit.item.ItemService;
-import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.exception.NotAvailableException;
+import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.exception.NotValidDateException;
+import ru.practicum.shareit.item.ItemStorage;
+import ru.practicum.shareit.item.dto.GetBookingForItemDto;
 import ru.practicum.shareit.item.model.Item;
-import ru.practicum.shareit.user.UserService;
-import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.user.UserStorage;
+import ru.practicum.shareit.user.dto.GetBookingUserDto;
 import ru.practicum.shareit.user.model.User;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.transaction.Transactional;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@Transactional
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
-public class BookingServiceImplTest {
+class BookingServiceImplTest {
+    private static BookingService bookingService;
+    private static BookingStorage bookingStorage;
+    private static ItemStorage itemStorage;
+    private static UserStorage userStorage;
 
-    private final EntityManager em;
-    private final BookingService service;
-    private final ItemService itemService;
-    private final UserService userService;
+    private static User user;
+    private static User user2;
+    private static Item item;
+    private static CreateBookingDto bookingDto;
+    private static LocalDateTime startTime;
+    private static LocalDateTime endTime;
+    private static GetBookingUserDto booker;
+    private static Booking booking;
+    private static GetBookingForItemDto itemDto;
+    private static List<Booking> listOfBookings;
 
-    @Test
-    public void save() {
-        User owner = addUser("user1", "email1@mail.ru");
-        User booker = addUser("user2", "email2@mail.ru");
-        Item item = addItem("item1", "description1", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        assertThat(booking.getId(), notNullValue());
-        assertThat(booking.getItem(), equalTo(item));
-        assertThat(booking.getBooker(), equalTo(booker));
-        assertThat(booking.getStart(), equalTo(bookingDto.getStart()));
-        assertThat(booking.getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(booking.getStatus(), equalTo(Status.WAITING));
+    @BeforeAll
+    static void beforeAll() {
+        startTime = LocalDateTime.now().minusDays(2);
+
+        endTime = LocalDateTime.now().minusDays(1);
+
+        user = User.builder()
+                .id(1L)
+                .name("userName")
+                .email("mail@ya.ru")
+                .build();
+
+        user2 = User.builder()
+                .id(2L)
+                .name("userName2")
+                .email("mail2@ya.ru")
+                .build();
+
+        item = Item.builder()
+                .id(1L)
+                .name("itemName")
+                .description("itemDescription")
+                .available(true)
+                .owner(user)
+                .build();
+
+        bookingDto = CreateBookingDto.builder()
+                .itemId(1L)
+                .start(startTime)
+                .end(endTime)
+                .build();
+
+        booker = GetBookingUserDto.builder()
+                .id(2L)
+                .build();
+
+        booking = Booking.builder()
+                .id(1L)
+                .startDate(startTime)
+                .endDate(endTime)
+                .booker(user2)
+                .status(BookingStatus.WAITING)
+                .item(item)
+                .build();
+
+        itemDto = GetBookingForItemDto.builder()
+                .id(1L)
+                .name("itemName")
+                .build();
+
+        listOfBookings = new ArrayList<>();
+        for (int i = 1; i < 21; i++) {
+            listOfBookings.add(booking.toBuilder().id(i + 1L).build());
+        }
+    }
+
+    @BeforeEach
+    void setUp() {
+        bookingStorage = Mockito.mock(BookingStorage.class);
+        itemStorage = Mockito.mock(ItemStorage.class);
+        userStorage = Mockito.mock(UserStorage.class);
+        bookingService = new BookingServiceImpl(bookingStorage, userStorage, itemStorage);
     }
 
     @Test
-    public void update() {
-        User owner = addUser("user3", "email3@mail.ru");
-        User booker = addUser("user4", "email4@mail.ru");
-        Item item = addItem("item2", "description2", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        Boolean isApproved = true;
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        service.update(owner.getId(), isApproved, booking.getId());
-        assertThat(booking.getId(), notNullValue());
-        assertThat(booking.getItem(), equalTo(item));
-        assertThat(booking.getBooker(), equalTo(booker));
-        assertThat(booking.getStart(), equalTo(bookingDto.getStart()));
-        assertThat(booking.getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(booking.getStatus(), equalTo(Status.APPROVED));
+    void shouldCreateBooking() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(item));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
+
+        GetBookingDto getBookingDto = bookingService.create(2L, bookingDto);
+
+        assertThat(getBookingDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("start", startTime)
+                .hasFieldOrPropertyWithValue("end", endTime)
+                .hasFieldOrPropertyWithValue("status", BookingStatus.WAITING)
+                .hasFieldOrPropertyWithValue("booker", booker)
+                .hasFieldOrPropertyWithValue("item", itemDto);
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).save(any(Booking.class));
     }
 
     @Test
-    public void findByBookerId() {
-        User owner = addUser("user5", "email5@mail.ru");
-        User booker = addUser("user6", "email6@mail.ru");
-        Item item = addItem("item3", "description3", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        Integer from = 0;
-        Integer size = 10;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByBookerId(booker.getId(), from, size);
+    void shouldGetExceptionCreateBookingNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(item));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.create(2L, bookingDto)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
     }
 
     @Test
-    public void findByOwnerId() {
-        User owner = addUser("user7", "email7@mail.ru");
-        User booker = addUser("user8", "email8@mail.ru");
-        Item item = addItem("item4", "description4", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        Integer from = 0;
-        Integer size = 10;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByOwnerId(owner.getId(), from, size);
+    void shouldGetExceptionCreateBookingNotFoundItem() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.create(2L, bookingDto)
+        );
+
+        assertEquals("Вещь не найдена",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
     }
 
     @Test
-    public void findByStateUserWAITING() {
-        User owner = addUser("user9", "email9@mail.ru");
-        User booker = addUser("user10", "email10@mail.ru");
-        Item item = addItem("item5", "description5", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        State state = State.WAITING;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateUser(booker.getId(), state);
+    void shouldGetExceptionCreateBookingNotValidDateException() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(item));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotValidDateException exception = Assertions.assertThrows(
+                NotValidDateException.class,
+                () -> bookingService.create(2L, bookingDto.toBuilder().start(endTime).end(startTime).build())
+        );
+
+        assertEquals("Дата окончания не может быть раньше или равна дате начала",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, never()).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
     }
 
     @Test
-    public void findByStateOwnerWAITING() {
-        User owner = addUser("user11", "email11@mail.ru");
-        User booker = addUser("user12", "email12@mail.ru");
-        Item item = addItem("item6", "description6", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        State state = State.WAITING;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateOwner(owner.getId(), state);
+    void shouldGetExceptionCreateBookingNotAvailableException() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(item.toBuilder().available(false).build()));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotAvailableException exception = Assertions.assertThrows(
+                NotAvailableException.class,
+                () -> bookingService.create(2L, bookingDto)
+        );
+
+        assertEquals("Вещь не доступна для бронирования",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
     }
 
     @Test
-    public void findByStateUserREJECTED() {
-        User owner = addUser("user13", "email13@mail.ru");
-        User booker = addUser("user14", "email14@mail.ru");
-        Item item = addItem("item7", "description5", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        State state = State.REJECTED;
-        Boolean isApproved = false;
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        service.update(owner.getId(), isApproved, booking.getId());
-        List<BookingResponseDto> bookings = service.findByStateUser(booker.getId(), state);
+    void shouldGetExceptionCreateBookingNotFoundSelfItem() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(itemStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(item));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.REJECTED));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.create(1L, bookingDto)
+        );
+
+        assertEquals("Нельзя забронировать свою вещь",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(itemStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
     }
 
     @Test
-    public void findByStateOwnerREJECTED() {
-        User owner = addUser("user15", "email15@mail.ru");
-        User booker = addUser("user16", "email16@mail.ru");
-        Item item = addItem("item8", "description8", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        State state = State.REJECTED;
-        Boolean isApproved = false;
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.item.owner.id = :ownerId", Booking.class);
-        Booking booking = query.setParameter("ownerId", owner.getId()).getSingleResult();
-        service.update(owner.getId(), isApproved, booking.getId());
-        List<BookingResponseDto> bookings = service.findByStateOwner(owner.getId(), state);
+    void shouldGetExceptionWithApproveBookingNoFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.REJECTED));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.approveBooking(1L, 1L, true)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
+        verify(bookingStorage, never()).findById(anyLong());
     }
 
     @Test
-    public void findByStateUserCURRENT() {
-        User owner = addUser("user17", "email17@mail.ru");
-        User booker = addUser("user18", "email18@mail.ru");
-        Item item = addItem("item9", "description5", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-01-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-12-02T12:00:00"));
-        State state = State.CURRENT;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateUser(booker.getId(), state);
+    void shouldGetExceptionWithApproveBookingNoFoundBooking() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.approveBooking(1L, 1L, true)
+        );
+
+        assertEquals("Бронирование не найдено",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void findByStateOwnerCURRENT() {
-        User owner = addUser("user19", "email19@mail.ru");
-        User booker = addUser("user20", "email20@mail.ru");
-        Item item = addItem("item10", "description6", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-01-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-12-02T12:00:00"));
-        State state = State.CURRENT;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateOwner(owner.getId(), state);
+    void shouldGetExceptionWithApproveBookingNoFoundOwner() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.approveBooking(2L, 1L, true)
+        );
+
+        assertEquals("Бронирование не найдено",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void findByStateUserPAST() {
-        User owner = addUser("user21", "email21@mail.ru");
-        User booker = addUser("user22", "email22@mail.ru");
-        Item item = addItem("item11", "description5", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-01-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-02-02T12:00:00"));
-        State state = State.PAST;
-        Boolean isApproved = true;
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        service.update(owner.getId(), isApproved, booking.getId());
-        List<BookingResponseDto> bookings = service.findByStateUser(booker.getId(), state);
+    void shouldGetExceptionWithApproveBookingNotAvailableAlreadyApproved() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().status(BookingStatus.APPROVED).build()));
+        when(bookingStorage.save(any(Booking.class)))
+                .thenReturn(booking);
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.APPROVED));
+        final NotAvailableException exception = Assertions.assertThrows(
+                NotAvailableException.class,
+                () -> bookingService.approveBooking(1L, 1L, true)
+        );
+
+        assertEquals("Бронирование уже подтверждено",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).save(any(Booking.class));
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void findByStateOwnerPAST() {
-        User owner = addUser("user23", "email23@mail.ru");
-        User booker = addUser("user24", "email24@mail.ru");
-        Item item = addItem("item12", "description12", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-01-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-02-02T12:00:00"));
-        State state = State.PAST;
-        Boolean isApproved = true;
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        service.update(owner.getId(), isApproved, booking.getId());
-        List<BookingResponseDto> bookings = service.findByStateOwner(owner.getId(), state);
+    void shouldGetBookingByUserOwnerItem() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.APPROVED));
+        GetBookingDto getBookingDto = bookingService.getBookingByUserOwner(1L, 1L);
+
+        assertThat(getBookingDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("start", startTime)
+                .hasFieldOrPropertyWithValue("end", endTime)
+                .hasFieldOrPropertyWithValue("status", BookingStatus.WAITING)
+                .hasFieldOrPropertyWithValue("booker", booker)
+                .hasFieldOrPropertyWithValue("item", itemDto);
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void findByStateUserFUTURE() {
-        User owner = addUser("user25", "email25@mail.ru");
-        User booker = addUser("user26", "email26@mail.ru");
-        Item item = addItem("item13", "description13", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-10-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-12-02T12:00:00"));
-        State state = State.FUTURE;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateUser(booker.getId(), state);
+    void shouldGetBookingByUserOwnerBooking() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        GetBookingDto getBookingDto = bookingService.getBookingByUserOwner(2L, 1L);
+
+        assertThat(getBookingDto)
+                .hasFieldOrPropertyWithValue("id", 1L)
+                .hasFieldOrPropertyWithValue("start", startTime)
+                .hasFieldOrPropertyWithValue("end", endTime)
+                .hasFieldOrPropertyWithValue("status", BookingStatus.WAITING)
+                .hasFieldOrPropertyWithValue("booker", booker)
+                .hasFieldOrPropertyWithValue("item", itemDto);
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
     @Test
-    public void findByStateOwnerFUTURE() {
-        User owner = addUser("user27", "email27@mail.ru");
-        User booker = addUser("user28", "email28@mail.ru");
-        Item item = addItem("item14", "description14", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        bookingDto.setStart(LocalDateTime.parse("2023-10-02T12:00:00"));
-        bookingDto.setEnd(LocalDateTime.parse("2023-12-02T12:00:00"));
-        State state = State.FUTURE;
-        service.save(bookingDto, booker.getId());
-        List<BookingResponseDto> bookings = service.findByStateOwner(owner.getId(), state);
+    void shouldGetExceptionWithGetBookingByUserOwnerNotFoundUser() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
 
-        assertThat(bookings, hasSize(1));
-        assertThat(bookings.get(0).getId(), notNullValue());
-        assertThat(bookings.get(0).getItem().getId(), equalTo(item.getId()));
-        assertThat(bookings.get(0).getItem().getName(), equalTo(item.getName()));
-        assertThat(bookings.get(0).getBooker().getId(), equalTo(booker.getId()));
-        assertThat(bookings.get(0).getBooker().getName(), equalTo(booker.getName()));
-        assertThat(bookings.get(0).getStart(), equalTo(bookingDto.getStart()));
-        assertThat(bookings.get(0).getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(bookings.get(0).getStatus(), equalTo(Status.WAITING));
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.getBookingByUserOwner(1L, 1L)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).findById(anyLong());
     }
 
     @Test
-    public void getById() {
-        User owner = addUser("user29", "email29@mail.ru");
-        User booker = addUser("user30", "email30@mail.ru");
-        Item item = addItem("item15", "description15", owner.getId());
-        BookingDto bookingDto = makeBookingDto(item.getId());
-        service.save(bookingDto, booker.getId());
-        TypedQuery<Booking> query = em.createQuery("Select b from Booking b " +
-                "where b.booker.id = :bookerId", Booking.class);
-        Booking booking = query.setParameter("bookerId", booker.getId()).getSingleResult();
-        BookingResponseDto checkBooking = service.getById(owner.getId(), booking.getId());
-        assertThat(checkBooking.getId(), equalTo(booking.getId()));
-        assertThat(checkBooking.getItem().getId(), equalTo(item.getId()));
-        assertThat(checkBooking.getItem().getName(), equalTo(item.getName()));
-        assertThat(checkBooking.getBooker().getId(), equalTo(booker.getId()));
-        assertThat(checkBooking.getBooker().getName(), equalTo(booker.getName()));
-        assertThat(checkBooking.getStart(), equalTo(bookingDto.getStart()));
-        assertThat(checkBooking.getEnd(), equalTo(bookingDto.getEnd()));
-        assertThat(checkBooking.getStatus(), equalTo(Status.WAITING));
+    void shouldGetExceptionWithGetBookingByUserOwnerNotFoundBooking() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.getBookingByUserOwner(1L, 1L)
+        );
+
+        assertEquals("Бронирование не найдено",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
-    private BookingDto makeBookingDto(Integer itemId) {
-        BookingDto bookingDto = new BookingDto();
-        bookingDto.setStart(LocalDateTime.now());
-        bookingDto.setEnd(LocalDateTime.now());
-        bookingDto.setItemId(itemId);
-        return bookingDto;
+    @Test
+    void shouldGetExceptionWithGetBookingByUserOwnerNotFoundOwner() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(booking.toBuilder().build()));
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.getBookingByUserOwner(3L, 1L)
+        );
+
+        assertEquals("Бронирование не найдено",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findById(anyLong());
     }
 
-    private User addUser(String name, String email) {
-        UserDto userDto = new UserDto();
-        userDto.setName(name);
-        userDto.setEmail(email);
-        userService.save(userDto);
-        TypedQuery<User> query = em.createQuery("Select u from User u where u.email = :email", User.class);
-        return query.setParameter("email", userDto.getEmail())
-                .getSingleResult();
+    @Test
+    void shouldGetUserBookingsWithAll() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByBooker(any(User.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getUserBookings(1L, "aLl", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByBooker(any(User.class), any(Pageable.class));
     }
 
-    private Item addItem(String name, String description, Integer userId) {
-        ItemDto itemDto = new ItemDto();
-        itemDto.setName(name);
-        itemDto.setDescription(description);
-        itemDto.setAvailable(true);
-        itemDto.setRequestId(1);
-        itemService.save(itemDto, userId);
-        TypedQuery<Item> query = em.createQuery("Select i from Item i where i.name = :name", Item.class);
-        return query.setParameter("name", itemDto.getName())
-                .getSingleResult();
+    @Test
+    void shouldGetExceptionWithGetUserBookingsWithAll() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.findByBooker(any(User.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.getUserBookings(1L, "aLl", 1, 5)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).findByBooker(any(User.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetUserBookingsWithCurrent() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByBookerCurrent(any(User.class), any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getUserBookings(1L, "cuRRenT", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByBookerCurrent(any(User.class), any(LocalDateTime.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetUserBookingsWithPast() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByBookerPast(any(User.class), any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getUserBookings(1L, "pAST", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByBookerPast(any(User.class), any(LocalDateTime.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetUserBookingsWithFuture() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByBookerFuture(any(User.class), any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getUserBookings(1L, "FUTURE", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByBookerFuture(any(User.class), any(LocalDateTime.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetUserBookingsWithWaiting() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByBookerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getUserBookings(1L, "WAITING", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByBookerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetExceptionWithGetOwnerBookingsWithAll() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.empty());
+        when(bookingStorage.findByBooker(any(User.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        final NotFoundException exception = Assertions.assertThrows(
+                NotFoundException.class,
+                () -> bookingService.getOwnerBookings(1L, "aLl", 1, 5)
+        );
+
+        assertEquals("Пользователь не найден",
+                exception.getMessage());
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, never()).findByBooker(any(User.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetOwnerBookingsWithWaiting() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByItemOwnerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getOwnerBookings(1L, "WAITING", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByItemOwnerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class));
+    }
+
+    @Test
+    void shouldGetOwnerBookingsWithReject() {
+        when(userStorage.findById(anyLong()))
+                .thenReturn(Optional.ofNullable(user));
+        when(bookingStorage.findByItemOwnerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class)))
+                .thenReturn(listOfBookings);
+
+        List<GetBookingDto> bookings = bookingService.getOwnerBookings(1L, "rejected", 1, 5);
+
+        assertThat(bookings)
+                .isNotEmpty()
+                .hasSize(20)
+                .satisfies(list -> assertThat(list.get(0)).hasFieldOrPropertyWithValue("id", 2L));
+        verify(userStorage, times(1)).findById(anyLong());
+        verify(bookingStorage, times(1)).findByItemOwnerAndStatus(any(User.class), any(BookingStatus.class), any(Pageable.class));
     }
 }
