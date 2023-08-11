@@ -3,12 +3,8 @@ package ru.practicum.shareit.mapper;
 import lombok.experimental.UtilityClass;
 import ru.practicum.shareit.booking.enam.BookingStatus;
 import ru.practicum.shareit.booking.model.Booking;
-import ru.practicum.shareit.item.dto.CreateUpdateItemDto;
-import ru.practicum.shareit.item.dto.GetBookingForItemDto;
-import ru.practicum.shareit.item.dto.GetCommentDto;
-import ru.practicum.shareit.item.dto.GetItemDto;
+import ru.practicum.shareit.item.dto.*;
 import ru.practicum.shareit.item.model.Item;
-import ru.practicum.shareit.request.dto.GetItemForGetItemRequestDto;
 
 import java.time.LocalDateTime;
 import java.util.Set;
