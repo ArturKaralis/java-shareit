@@ -47,7 +47,7 @@ public class GatewayUserController {
 
     @PatchMapping("/{userId}")
     public ResponseEntity<Object> update(@PathVariable long userId,
-                                         @RequestBody @Validated(OnUpdate.class) CreateUpdateUserDto createUpdateUserDto) {
+                             @RequestBody @Validated(OnUpdate.class) CreateUpdateUserDto createUpdateUserDto) {
         return client.update(userId, createUpdateUserDto);
     }
 

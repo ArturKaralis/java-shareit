@@ -30,7 +30,7 @@ public class GatewayItemRequestController {
 
     @PostMapping
     public ResponseEntity<Object> createRequest(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
-                                                @RequestBody @Valid CreateItemRequestDto itemRequestDto) {
+                                           @RequestBody @Valid CreateItemRequestDto itemRequestDto) {
         return client.createRequest(userId, itemRequestDto);
     }
 
@@ -41,14 +41,14 @@ public class GatewayItemRequestController {
 
     @GetMapping("/all")
     public ResponseEntity<Object> getAllRequests(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
-                                                 @RequestParam(defaultValue = "0") @Min(0) @Max(Integer.MAX_VALUE) int from,
-                                                 @RequestParam(defaultValue = "20") @Min(1) @Max(20) int size) {
+                                                  @RequestParam(defaultValue = "0") @Min(0) @Max(Integer.MAX_VALUE) int from,
+                                                  @RequestParam(defaultValue = "20") @Min(1) @Max(20) int size) {
         return client.getAllRequests(userId, from, size);
     }
 
     @GetMapping("/{requestId}")
     public ResponseEntity<Object> getRequestById(@RequestHeader(REQUEST_HEADER_USER_ID) long userId,
-                                                 @PathVariable long requestId) {
+                                            @PathVariable long requestId) {
         return client.getRequestById(userId, requestId);
     }
 }
