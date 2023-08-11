@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import ru.practicum.shareit.booking.model.Booking;
-import ru.practicum.shareit.request.ItemRequest;
+import ru.practicum.shareit.request.model.ItemRequest;
 import ru.practicum.shareit.user.model.User;
 
 import javax.persistence.Column;

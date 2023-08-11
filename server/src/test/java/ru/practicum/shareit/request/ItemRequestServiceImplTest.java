@@ -11,6 +11,7 @@ import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.request.dto.CreateItemRequestDto;
 import ru.practicum.shareit.request.dto.GetItemRequestDto;
 
+import ru.practicum.shareit.request.model.ItemRequest;
 import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.user.model.User;
 

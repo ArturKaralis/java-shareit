@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.shareit.request.dto.CreateItemRequestDto;
 import ru.practicum.shareit.request.dto.GetItemRequestDto;
 
+import ru.practicum.shareit.request.model.ItemRequest;
 import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.user.model.User;
 

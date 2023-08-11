@@ -1,9 +1,9 @@
 package ru.practicum.shareit.mapper;
 
 import lombok.experimental.UtilityClass;
-import ru.practicum.shareit.request.ItemRequest;
 import ru.practicum.shareit.request.dto.CreateItemRequestDto;
 import ru.practicum.shareit.request.dto.GetItemRequestDto;
+import ru.practicum.shareit.request.model.ItemRequest;
 
 import java.util.ArrayList;
 import java.util.stream.Collectors;
