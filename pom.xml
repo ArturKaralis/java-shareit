@@ -5,14 +5,16 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.7.2</version>
+		<version>2.7.9</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
 	<groupId>ru.practicum</groupId>
 	<artifactId>shareit</artifactId>
-	<version>1.0</version>
 	<packaging>pom</packaging>
+	<version>0.0.1-SNAPSHOT</version>
+
+	<name>ShareIt</name>
 
 	<properties>
 		<maven.compiler.source>11</maven.compiler.source>
@@ -20,32 +22,21 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.jetbrains</groupId>
-				<artifactId>annotations-java5</artifactId>
-				<version>24.0.1</version>
-			</dependency>
-			<dependency>
-				<groupId>com.mageddo.lombok</groupId>
-				<artifactId>lombok-ext</artifactId>
-				<version>2.4.4</version>
-			</dependency>
-			<dependency>
-				<groupId>commons-lang</groupId>
-				<artifactId>commons-lang</artifactId>
-				<version>2.6</version>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
-
 	<modules>
-		<module>api</module>
-		<module>util</module>
 		<module>gateway</module>
 		<module>server</module>
 	</modules>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<version>42.3.8</version>
+				<scope>runtime</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<pluginManagement>
